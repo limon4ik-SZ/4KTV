@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>4K ТЕЛЕВИЗОР В ПУСТОТЕ — ОГРОМНЫЙ ЭКРАН (мышь скрыта, меню по OOO)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', monospace;
+        }
+        /* Меню — скрыто по умолчанию, появляется по тройному O */
+        .secret-menu {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            right: 30px;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 50px;
+            padding: 15px 25px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            z-index: 1000;
+            border: 1px solid #ffaa44;
+            pointer-events: auto;
+            color: white;
+            font-weight: bold;
+            transition: 0.2s ease;
+            font-size: 14px;
+        }
+        .hidden-menu {
+            display: none;
+        }
+        .menu-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #1a1a2a;
+            padding: 5px 20px;
+            border-radius: 40px;
+        }
+        input[type="range"] {
+            width: 160px;
+            cursor: pointer;
+            background: #ffaa44;
+            height: 3px;
+        }
+        .file-label {
+            background: #ffaa33;
+            padding: 6px 18px;
+            border-radius: 40px;
+            cursor: pointer;
+            color: #000;
+            font-weight: bold;
+        }
+        .file-label:hover {
+            background: #ffcc66;
+        }
+        #statusText {
+            font-size: 0.7rem;
+            background: #000000aa;
+            padding: 4px 16px;
+            border-radius: 20px;
+        }
+        .hint {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.5);
+            color: #aaa;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            pointer-events: none;
+            font-family: monospace;
+            z-index: 999;
+        }
+        @media (max-width: 750px) {
+            .secret-menu { flex-direction: column; align-items: stretch; border-radius: 25px; bottom: 15px; left: 15px; right: 15px; }
+            .menu-group { justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Секретное меню (скрыто, пока не нажать OOO) -->
+    <div id="secretMenu" class="secret-menu hidden-menu">
+        <div class="menu-group">💡 LUMEN <input type="range" id="lumenControl" min="0.2" max="2.2" step="0.01" value="1.0"></div>
+        <div class="menu-group">
+            <span class="file-label" id="uploadVideoBtn">📁 ЗАГРУЗИТЬ ВИДЕО (MP4)</span>
+            <input type="file" id="videoFileInput" accept="video/mp4" style="display:none">
+        </div>
+        <div id="statusText">✨ 4K ТЕЛЕВИЗОР | мышь скрыта | крути правой кнопкой | OOO — меню</div>
+    </div>
+    <div class="hint"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // СКРЫВАЕМ КУРСОР (белой стрелки нет)
+        document.body.style.cursor = 'none';
+        const canvasElem = document.createElement('div');
+        
+        // СЦЕНА — без пола, без стульев, только экран
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x010018);
+        scene.fog = new THREE.FogExp2(0x010018, 0.002);
+
+        // Камера
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.8, 6.8);
+        camera.lookAt(0, 1.8, -3);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Управление камерой — мышь скрыта, но вращать можно (правой кнопкой)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 1.0;
+        controls.zoomSpeed = 1.0;
+        controls.panSpeed = 0.8;
+        controls.target.set(0, 1.8, -4.0);
+        controls.enableZoom = true;
+
+        // ---- ОГРОМНЫЙ 4K ЭКРАН (10.0 x 5.6) ----
+        let videoTexture = null;
+        let videoElement = null;
+        let currentScreen = null;
+
+        function createVideoScreen(videoEl) {
+            const texture = new THREE.VideoTexture(videoEl);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            
+            // ОГРОМНЫЙ ЭКРАН КАК 4K ТЕЛЕВИЗОР
+            const screenWidth = 10.0;
+            const screenHeight = 5.6;
+            const geometry = new THREE.PlaneGeometry(screenWidth, screenHeight);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                emissive: 0x333333,
+                emissiveIntensity: 0.5,
+                color: 0xffffff,
+                roughness: 0.2,
+                metalness: 0.05
+            });
+            const screen = new THREE.Mesh(geometry, material);
+            screen.position.set(0, 1.8, -5.2);
+            return { screen, texture };
+        }
+
+        function loadVideo(file) {
+            if (videoElement) {
+                videoElement.pause();
+                if (videoTexture) videoTexture.dispose();
+            }
+            if (currentScreen) {
+                scene.remove(currentScreen.screen);
+            }
+            const url = URL.createObjectURL(file);
+            const video = document.createElement('video');
+            video.src = url;
+            video.loop = true;
+            video.muted = false;
+            video.crossOrigin = "Anonymous";
+            video.playsInline = true;
+            video.autoplay = true;
+            video.play().catch(e => {
+                const unlock = () => {
+                    video.play();
+                    window.removeEventListener('click', unlock);
+                };
+                window.addEventListener('click', unlock);
+            });
+            const { screen, texture } = createVideoScreen(video);
+            scene.add(screen);
+            currentScreen = { screen, texture };
+            videoTexture = texture;
+            videoElement = video;
+            const statusDiv = document.getElementById('statusText');
+            if (statusDiv) statusDiv.innerHTML = `🎬 4K ВИДЕО: ${file.name} | крути камеру правой кнопкой`;
+        }
+
+        // ДЕМО-ВИДЕО В 4K (настоящий 4K HDR ролик)
+        function startDemo() {
+            // 4K HDR видео — высочайшее качество
+            const demoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCar.mp4";
+            const video = document.createElement('video');
+            video.src = demoUrl;
+            video.loop = true;
+            video.muted = false;
+            video.crossOrigin = "Anonymous";
+            video.autoplay = true;
+            video.playsInline = true;
+            const { screen, texture } = createVideoScreen(video);
+            scene.add(screen);
+            currentScreen = { screen, texture };
+            videoTexture = texture;
+            videoElement = video;
+            const statusDiv = document.getElementById('statusText');
+            if (statusDiv) statusDiv.innerHTML = "🔥 ОГРОМНЫЙ 4K ЭКРАН | БЕЗ ПОЛА | мышь скрыта | OOO меню";
+        }
+        startDemo();
+
+        // ЗАГРУЗКА
+        const fileInput = document.getElementById('videoFileInput');
+        const uploadBtn = document.getElementById('uploadVideoBtn');
+        if (uploadBtn) {
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) loadVideo(e.target.files[0]);
+            });
+        }
+
+        // --- ОСВЕЩЕНИЕ LUMEN (только свет, пола нет) ---
+        const mainLight = new THREE.DirectionalLight(0xffeedd, 1.0);
+        mainLight.position.set(1.5, 2.8, 1.5);
+        scene.add(mainLight);
+        
+        const fillLight = new THREE.PointLight(0xccaa88, 0.6);
+        fillLight.position.set(-1.2, 2.0, 1.2);
+        scene.add(fillLight);
+        
+        const ambient = new THREE.AmbientLight(0x332211, 0.5);
+        scene.add(ambient);
+        
+        const backLight = new THREE.PointLight(0x88aaff, 0.4);
+        backLight.position.set(0, 1.8, -3);
+        scene.add(backLight);
+        
+        const rimLight = new THREE.PointLight(0xffaa66, 0.5);
+        rimLight.position.set(0, 2.2, -2.5);
+        scene.add(rimLight);
+        
+        const topLight = new THREE.SpotLight(0xffaa77, 0.4);
+        topLight.position.set(0, 3.2, 0.5);
+        scene.add(topLight);
+        
+        const lumenSlider = document.getElementById('lumenControl');
+        if (lumenSlider) {
+            lumenSlider.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                mainLight.intensity = 0.4 + val;
+                fillLight.intensity = 0.2 + val * 0.6;
+                ambient.intensity = 0.2 + val * 0.5;
+                backLight.intensity = 0.2 + val * 0.4;
+                rimLight.intensity = 0.2 + val * 0.5;
+                topLight.intensity = 0.2 + val * 0.4;
+                const statusDiv = document.getElementById('statusText');
+                if (statusDiv) statusDiv.innerHTML = `💡 LUMEN = ${val.toFixed(2)} | свет только для экрана`;
+            });
+        }
+
+        // --- АНИМАЦИЯ ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            if (videoTexture && videoElement && !videoElement.paused) {
+                videoTexture.needsUpdate = true;
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- МЕНЮ ПО ТРОЙНОМУ НАЖАТИЮ O (буква O, три раза подряд) ---
+        let oPressCount = 0;
+        let oTimer = null;
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'o' || e.key === 'O') {
+                if (oTimer) clearTimeout(oTimer);
+                oPressCount++;
+                if (oPressCount === 3) {
+                    const menu = document.getElementById('secretMenu');
+                    if (menu) {
+                        menu.classList.toggle('hidden-menu');
+                        // показываем статус
+                        const statusDiv = document.getElementById('statusText');
+                        if (statusDiv && !menu.classList.contains('hidden-menu')) {
+                            statusDiv.innerHTML = "🔓 МЕНЮ АКТИВИРОВАНО | загрузи видео | настрой свет | OOO скрыть";
+                        } else if (statusDiv) {
+                            statusDiv.innerHTML = "🎬 ЧИСТЫЙ 4K ЭКРАН | мышь скрыта | крути правой кнопкой";
+                        }
+                    }
+                    oPressCount = 0;
+                }
+                oTimer = setTimeout(() => { oPressCount = 0; }, 600);
+            }
+        });
+        
+        setTimeout(() => {
+            const statusDiv = document.getElementById('statusText');
+            if (statusDiv) statusDiv.innerHTML = "🎬 4K ТЕЛЕВИЗОР В ПУСТОТЕ | мышь скрыта | крути правой кнопкой | OOO — меню";
+        }, 500);
+    </script>
+</body>
+</html>
